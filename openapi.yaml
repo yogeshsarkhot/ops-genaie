@@ -1,0 +1,398 @@
+openapi: 3.0.0
+info:
+  title: Insurance API
+  description: REST API for managing insurance accounts and policies
+  version: 0.1.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+components:
+  schemas:
+    AccountBase:
+      type: object
+      required:
+        - name
+        - address_line1
+        - city
+        - state
+        - zip_code
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Acme Corporation
+        address_line1:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: 123 Main St
+        address_line2:
+          type: string
+          maxLength: 200
+          nullable: true
+          example: Suite 456
+        city:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Anytown
+        state:
+          type: string
+          minLength: 2
+          maxLength: 50
+          example: CA
+        zip_code:
+          type: string
+          pattern: '^\d{5}(-\d{4})?$'
+          example: "90210"
+
+    AccountCreate:
+      allOf:
+        - $ref: '#/components/schemas/AccountBase'
+
+    AccountUpdate:
+      allOf:
+        - $ref: '#/components/schemas/AccountBase'
+
+    AccountInDB:
+      allOf:
+        - $ref: '#/components/schemas/AccountBase'
+        - type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            created_at:
+              type: string
+              format: date-time
+              example: "2024-03-26T10:00:00Z"
+            updated_at:
+              type: string
+              format: date-time
+              example: "2024-03-26T10:00:00Z"
+
+    PolicyBase:
+      type: object
+      required:
+        - effective_date
+        - expiration_date
+        - premium
+        - account_id
+      properties:
+        effective_date:
+          type: string
+          format: date
+          example: "2024-01-01"
+        expiration_date:
+          type: string
+          format: date
+          example: "2025-01-01"
+        premium:
+          type: number
+          format: float
+          minimum: 0
+          exclusiveMinimum: true
+          example: 1000.50
+        account_id:
+          type: integer
+          example: 1
+
+    PolicyCreate:
+      allOf:
+        - $ref: '#/components/schemas/PolicyBase'
+
+    PolicyUpdate:
+      allOf:
+        - $ref: '#/components/schemas/PolicyBase'
+
+    PolicyInDB:
+      allOf:
+        - $ref: '#/components/schemas/PolicyBase'
+        - type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            created_at:
+              type: string
+              format: date-time
+              example: "2024-03-26T10:00:00Z"
+            updated_at:
+              type: string
+              format: date-time
+              example: "2024-03-26T10:00:00Z"
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Resource not found"
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    loc:
+                      type: array
+                      items:
+                        type: string
+                    msg:
+                      type: string
+                    type:
+                      type: string
+
+paths:
+  /accounts:
+    get:
+      summary: List accounts
+      description: Retrieve a list of accounts with pagination
+      parameters:
+        - name: skip
+          in: query
+          description: Number of records to skip
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          description: Maximum number of records to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 100
+      responses:
+        '200':
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountInDB'
+        '500':
+          description: Internal server error
+    post:
+      summary: Create account
+      description: Create a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountCreate'
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountInDB'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          description: Internal server error
+
+  /accounts/{account_id}:
+    parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: ID of the account
+    get:
+      summary: Get account
+      description: Retrieve a specific account by ID
+      responses:
+        '200':
+          description: Account details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountInDB'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Internal server error
+    put:
+      summary: Update account
+      description: Update an existing account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountUpdate'
+      responses:
+        '200':
+          description: Account updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountInDB'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          description: Internal server error
+    delete:
+      summary: Delete account
+      description: Delete an account and its associated policies
+      responses:
+        '204':
+          description: Account deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Internal server error
+
+  /policies:
+    get:
+      summary: List policies
+      description: Retrieve a list of policies with pagination
+      parameters:
+        - name: skip
+          in: query
+          description: Number of records to skip
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          description: Maximum number of records to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 100
+      responses:
+        '200':
+          description: List of policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PolicyInDB'
+        '500':
+          description: Internal server error
+    post:
+      summary: Create policy
+      description: Create a new policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyCreate'
+      responses:
+        '201':
+          description: Policy created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyInDB'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          description: Internal server error
+
+  /policies/{policy_id}:
+    parameters:
+      - name: policy_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: ID of the policy
+    get:
+      summary: Get policy
+      description: Retrieve a specific policy by ID
+      responses:
+        '200':
+          description: Policy details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyInDB'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Internal server error
+    put:
+      summary: Update policy
+      description: Update an existing policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyUpdate'
+      responses:
+        '200':
+          description: Policy updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyInDB'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          description: Internal server error
+    delete:
+      summary: Delete policy
+      description: Delete a policy
+      responses:
+        '204':
+          description: Policy deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Internal server error
+
+  /health:
+    get:
+      summary: Health check
+      description: Check if the API is healthy
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy" 
