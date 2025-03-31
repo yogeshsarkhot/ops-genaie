@@ -4,14 +4,11 @@ import chromadb
 import ollama
 import re
 from typing import List, Dict, Any
-from APIExecutor import APIExecutor
 import requests
 import json
 import yaml
 import os
 from urllib.parse import urljoin
-#from openapi_parser import OpenAPIParser
-#from vector_db import VectorDBHandler
 
 class VectorDBHandler:
     def __init__(self, collection_name: str = 'api_descriptions'):
@@ -155,74 +152,6 @@ class OpenAPIParser:
 
 class APIExecutor:
     @staticmethod
-    def generate_request_details(api_info: Dict[str, Any], query: str) -> Dict[str, Any]:
-        """
-        Generate API request details using Llama3
-        
-        :param api_info: API information dictionary
-        :param query: User's query
-        :return: Request details with parameters and body
-        """
-        print("Debug - Input API Info:")
-        print(json.dumps(api_info, indent=2))
-        print(f"Debug - User Query: {query}")
-        
-        prompt = f"""
-        API Details:
-        {json.dumps(api_info, indent=2)}
-        
-        User Query: {query}
-        
-        Generate request parameters and body based on the query. 
-        Return a valid JSON with 'url_params' and 'request_body'.
-        IMPORTANT: Use ONLY the parameter names from the API path WITHOUT curly braces.
-        Example:
-        {{
-            "url_params": {{
-                "account_id": 2
-            }},
-            "request_body": {{}}
-        }}
-        """
-        
-        response = ollama.chat(
-            model='llama3',
-            messages=[{'role': 'user', 'content': prompt}]
-        )
-        
-        print("Debug - LLM Raw Response:")
-        print(response['message']['content'])
-        
-        # Extract JSON from response
-        try:
-            # Use regex to extract JSON, handling code blocks and markdown
-            import re
-            json_match = re.search(r'```(?:json)?\n(.*?)```', response['message']['content'], re.DOTALL | re.MULTILINE)
-            
-            if json_match:
-                json_str = json_match.group(1).strip()
-            else:
-                # Fallback to finding first JSON-like structure
-                json_match = re.search(r'\{.*\}', response['message']['content'], re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(0).strip()
-                else:
-                    raise ValueError("No JSON found")
-            
-            print("Debug - Extracted JSON String:")
-            print(json_str)
-            
-            request_details = json.loads(json_str)
-            
-            print("Debug - Parsed Request Details:")
-            print(json.dumps(request_details, indent=2))
-            
-            return request_details
-        except Exception as e:
-            print(f"Debug - JSON Parsing Error: {e}")
-            return {}
-
-    @staticmethod
     def execute_api_request(api_info: Dict[str, Any], request_details: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute API request
@@ -241,19 +170,31 @@ class APIExecutor:
         
         print(f"Debug - Original Full Path: {full_path}")
         
-        # Extract URL parameter from either API path or request details
-        url_param_name = [p.strip('{}') for p in re.findall(r'\{([^{}]*)\}', full_path)][0]
+        # Extract URL parameters using regex
+        url_param_matches = re.findall(r'\{([^{}]*)\}', full_path)
         url_params = request_details.get('url_params', {})
         
-        print(f"Debug - Extracted URL Param Name: {url_param_name}")
-        print(f"Debug - URL Params: {url_params}")
+        # Handle path with parameters
+        if url_param_matches:
+            for url_param_name in url_param_matches:
+                clean_param_name = url_param_name.strip('{}')
+                param_value = url_params.get(clean_param_name)
+                
+                if param_value is not None:
+                    # Replace the parameter in the URL
+                    full_path = re.sub(r'\{' + url_param_name + r'\}', str(param_value), full_path)
         
-        # Ensure the correct URL parameter is used
-        param_value = url_params.get(url_param_name)
+        # Handle query parameters from API specification
+        query_params = {}
+        if 'parameters' in api_info:
+            for param in api_info.get('parameters', []):
+                if param.get('in') == 'query' and param.get('name') in request_details.get('query_params', {}):
+                    query_params[param['name']] = request_details['query_params'][param['name']]
         
-        if param_value is not None:
-            # Replace the parameter in the URL
-            full_path = re.sub(r'\{' + url_param_name + r'\}', str(param_value), full_path)
+        # Add query parameters to URL if present
+        if query_params:
+            query_string = '&'.join(f"{k}={v}" for k, v in query_params.items())
+            full_path += '?' + query_string
         
         print(f"Debug - Final Full Path: {full_path}")
         
@@ -283,6 +224,97 @@ class APIExecutor:
             print(f"Debug - Exception: {str(e)}")
             return {
                 'error': str(e)
+            }
+
+    @staticmethod
+    def generate_request_details(api_info: Dict[str, Any], query: str) -> Dict[str, Any]:
+        """
+        Generate API request details using Llama3
+        
+        :param api_info: API information dictionary
+        :param query: User's query
+        :return: Request details with parameters and body
+        """
+        print("Debug - Input API Info:")
+        print(json.dumps(api_info, indent=2))
+        print(f"Debug - User Query: {query}")
+        
+        # Include information about query parameters in the prompt
+        query_param_info = ""
+        if 'parameters' in api_info:
+            query_params = [p for p in api_info.get('parameters', []) if p.get('in') == 'query']
+            if query_params:
+                query_param_info = "Optional Query Parameters:\n" + "\n".join([
+                    f"- {p['name']}: {p.get('description', 'No description')}" 
+                    for p in query_params
+                ])
+        
+        prompt = f"""
+        API Details:
+        {json.dumps(api_info, indent=2)}
+        
+        User Query: {query}
+        
+        {query_param_info}
+        
+        Generate request parameters and body based on the query. 
+        Return a valid JSON with 'url_params', 'query_params', and 'request_body'.
+        Example:
+        {{
+            "url_params": {{
+                "account_id": 2  // Only if path parameter is required
+            }},
+            "query_params": {{
+                "skip": 0,  // Optional query parameters
+                "limit": 100
+            }},
+            "request_body": {{}}
+        }}
+        """
+        
+        response = ollama.chat(
+            model='llama3',
+            messages=[{'role': 'user', 'content': prompt}]
+        )
+        
+        print("Debug - LLM Raw Response:")
+        print(response['message']['content'])
+        
+        # Extract JSON from response
+        try:
+            # Use regex to extract JSON, handling code blocks and markdown
+            json_match = re.search(r'```(?:json)?\n(.*?)```', response['message']['content'], re.DOTALL | re.MULTILINE)
+            
+            if json_match:
+                json_str = json_match.group(1).strip()
+            else:
+                # Fallback to finding first JSON-like structure
+                json_match = re.search(r'\{.*\}', response['message']['content'], re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(0).strip()
+                else:
+                    raise ValueError("No JSON found")
+            
+            print("Debug - Extracted JSON String:")
+            print(json_str)
+            
+            request_details = json.loads(json_str)
+            
+            # Ensure all expected keys are present
+            request_details.setdefault('url_params', {})
+            request_details.setdefault('query_params', {})
+            request_details.setdefault('request_body', {})
+            
+            print("Debug - Parsed Request Details:")
+            print(json.dumps(request_details, indent=2))
+            
+            return request_details
+        except Exception as e:
+            print(f"Debug - JSON Parsing Error: {e}")
+            return {
+                'url_params': {},
+                'query_params': {},
+                'request_body': {}
             }
 
 def main():
