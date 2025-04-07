@@ -1,5 +1,5 @@
 @echo off
 echo Activating virtual environment...
-call .venv\Scripts\activate.bat
+call venv\Scripts\activate.bat
 echo Starting the application...
-python -m streamlit run app/main.py
+streamlit run ops_genaie.py

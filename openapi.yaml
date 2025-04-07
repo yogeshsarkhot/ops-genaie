@@ -10,8 +10,6 @@ info:
 servers:
   - url: http://localhost:8000
     description: Local development server
-  - url: https://api.example.com
-    description: Production server
 
 components:
   schemas:
