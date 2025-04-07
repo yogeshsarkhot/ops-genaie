@@ -33,6 +33,13 @@ class Database:
                     request_body JSONB,
                     response_schemas JSONB
                 );
+
+                CREATE TABLE IF NOT EXISTS query_history (
+                    id SERIAL PRIMARY KEY,
+                    query TEXT,
+                    response TEXT,
+                    timestamp TIMESTAMP
+                );
             """)
             self.conn.commit()
 
@@ -60,4 +67,17 @@ class Database:
     def get_uploaded_files(self):
         with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM uploaded_files ORDER BY upload_timestamp DESC")
+            return cur.fetchall()
+
+    def save_query_history(self, query, response):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO query_history (query, response, timestamp) VALUES (%s, %s, %s)",
+                (query, response, datetime.now())
+            )
+            self.conn.commit()
+
+    def get_query_history(self):
+        with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM query_history ORDER BY timestamp DESC")
             return cur.fetchall()

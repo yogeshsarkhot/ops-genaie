@@ -5,7 +5,6 @@ from app.embeddings import EmbeddingHandler
 class LLMHandler:
     def __init__(self):
         self.model = "llama3"
-        self.history = []
         self.db = Database()
         self.embedding_handler = EmbeddingHandler()
 
@@ -29,11 +28,13 @@ class LLMHandler:
             messages=[
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_message}
-            ]
+            ],
+            options={"temperature": 0.0}
         )
         
-        self.history.append({'query': query, 'response': response['message']['content']})
+        # Store query and response in database
+        self.db.save_query_history(query, response['message']['content'])
         return response['message']['content']
 
     def get_history(self):
-        return self.history
+        return self.db.get_query_history()
