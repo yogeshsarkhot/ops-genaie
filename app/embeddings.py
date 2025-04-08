@@ -12,6 +12,7 @@ class EmbeddingHandler:
         text_parts = [
             f"API: {api_data['name']}",
             f"Method: {api_data['method']}",
+            f"Full URL: {api_data['full_path']}",
             f"Summary: {api_data['summary']}",
             f"Description: {api_data['description']}",
             f"Operation ID: {api_data['operation_id']}",
@@ -62,6 +63,8 @@ class EmbeddingHandler:
         metadata = {
             'name': api_data['name'],
             'method': api_data['method'],
+            'full_path': api_data['full_path'],
+            'base_url': api_data['base_url'],
             'summary': api_data['summary'],
             'description': api_data['description'],
             'operation_id': api_data['operation_id'],

@@ -1,12 +1,61 @@
 import ollama
 from app.database import Database
 from app.embeddings import EmbeddingHandler
+import json
+import re
 
 class LLMHandler:
     def __init__(self):
         self.model = "llama3"
         self.db = Database()
         self.embedding_handler = EmbeddingHandler()
+
+    def _replace_url_parameters(self, full_path, query):
+        """
+        Replace URL parameters in the full path with values extracted from the query.
+        Returns the modified path and any extracted parameters.
+        """
+        # Extract URL parameters using regex
+        url_param_matches = re.findall(r'\{([^{}]*)\}', full_path)
+        if not url_param_matches:
+            return full_path, {}
+
+        # Create a prompt to extract parameter values from the query
+        param_prompt = f"""Given the following query and URL parameters, extract the values for each parameter.
+        
+Query: {query}
+URL Parameters: {', '.join(url_param_matches)}
+
+Return a JSON object with parameter names and their values. If a value cannot be determined, use null.
+Example format:
+{{
+    "parameter_name": "extracted_value"
+}}
+"""
+        # Get parameter values from LLM
+        response = ollama.chat(
+            model=self.model,
+            messages=[
+                {'role': 'system', 'content': 'You are a parameter extractor. Extract values for URL parameters from the given query.'},
+                {'role': 'user', 'content': param_prompt}
+            ],
+            options={"temperature": 0.0}
+        )
+
+        try:
+            param_values = json.loads(response['message']['content'])
+        except json.JSONDecodeError:
+            param_values = {}
+
+        # Replace parameters in the URL
+        modified_path = full_path
+        for param_name in url_param_matches:
+            clean_param_name = param_name.strip('{}')
+            param_value = param_values.get(clean_param_name)
+            if param_value is not None:
+                modified_path = re.sub(r'\{' + param_name + r'\}', str(param_value), modified_path)
+
+        return modified_path, param_values
 
     def get_response(self, query):
         # First, try to find relevant information from vector database
@@ -20,8 +69,19 @@ class LLMHandler:
         # Prepare the user message with context from databases
         user_message = f"Question: {query}\n"
         if api_match:
-            user_message += f"Relevant API information: {api_match}\n"
-        
+            # Replace URL parameters if present
+            full_path = api_match['full_path']
+            modified_path, param_values = self._replace_url_parameters(full_path, query)
+            
+            user_message += f"Relevant API information:\n"
+            user_message += f"- API: {api_match['name']}\n"
+            user_message += f"- Method: {api_match['method']}\n"
+            user_message += f"- Full URL: {modified_path}\n"
+            if param_values:
+                user_message += f"- URL Parameters: {json.dumps(param_values, indent=2)}\n"
+            user_message += f"- Summary: {api_match['summary']}\n"
+            user_message += f"- Description: {api_match['description']}\n"
+                 
         # Get response from LLM
         response = ollama.chat(
             model=self.model,

@@ -31,7 +31,9 @@ class Database:
                     description TEXT,
                     parameters JSONB,
                     request_body JSONB,
-                    response_schemas JSONB
+                    response_schemas JSONB,
+                    base_url TEXT,
+                    full_path TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS query_history (
@@ -56,11 +58,12 @@ class Database:
     def save_api_data(self, file_id, api_data):
         with self.conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO apis (file_id, api_name, method, summary, description, parameters, request_body, response_schemas)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                """INSERT INTO apis (file_id, api_name, method, summary, description, parameters, request_body, response_schemas, base_url, full_path)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (file_id, api_data['name'], api_data['method'], api_data['summary'],
                  api_data['description'], json.dumps(api_data['parameters']),
-                 json.dumps(api_data['request_body']), json.dumps(api_data['response_schemas']))
+                 json.dumps(api_data['request_body']), json.dumps(api_data['response_schemas']),
+                 api_data.get('base_url', ''), api_data.get('full_path', ''))
             )
             self.conn.commit()
 

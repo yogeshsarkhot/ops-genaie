@@ -94,6 +94,10 @@ class FileProcessor:
         description = info.get('description', '')
         version = info.get('version', '')
         
+        # Get server URL
+        servers = data.get('servers', [])
+        base_url = servers[0].get('url', '') if servers else ''
+        
         # Get components for schema resolution
         components = data.get('components', {})
         
@@ -179,6 +183,9 @@ class FileProcessor:
                             'schema': schema
                         }
 
+                # Create full API path by combining base URL and path
+                full_path = f"{base_url.rstrip('/')}/{path.lstrip('/')}" if base_url else path
+
                 # Create API dictionary
                 api_dict = {
                     'name': path,
@@ -193,7 +200,9 @@ class FileProcessor:
                     'openapi_version': openapi_version,
                     'api_title': title,
                     'api_description': description,
-                    'api_version': version
+                    'api_version': version,
+                    'base_url': base_url,
+                    'full_path': full_path
                 }
                 
                 apis.append(api_dict)
