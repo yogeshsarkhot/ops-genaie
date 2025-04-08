@@ -168,6 +168,14 @@ class FileProcessor:
                         request_body = content['application/json'].get('schema', {})
                         if isinstance(request_body, dict) and '$ref' in request_body:
                             request_body = self.resolve_schema_reference(request_body['$ref'], components)
+                        # Convert request body to YAML string
+                        request_body = yaml.dump(request_body, default_flow_style=False, sort_keys=False)
+                    elif 'application/yaml' in content:
+                        request_body = content['application/yaml'].get('schema', {})
+                        if isinstance(request_body, dict) and '$ref' in request_body:
+                            request_body = self.resolve_schema_reference(request_body['$ref'], components)
+                        # Keep as YAML string
+                        request_body = yaml.dump(request_body, default_flow_style=False, sort_keys=False)
 
                 # Extract and resolve response schemas
                 response_schemas = {}
@@ -178,6 +186,8 @@ class FileProcessor:
                         if 'application/json' in content:
                             schema = content['application/json'].get('schema', {})
                             schema = self.resolve_response_schema(schema, components)
+                            # Convert response schema to YAML string
+                            schema = yaml.dump(schema, default_flow_style=False)
                         response_schemas[status_code] = {
                             'description': response_data.get('description', ''),
                             'schema': schema

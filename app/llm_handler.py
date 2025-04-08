@@ -3,6 +3,7 @@ from app.database import Database
 from app.embeddings import EmbeddingHandler
 import json
 import re
+import yaml
 
 class LLMHandler:
     def __init__(self):
@@ -57,6 +58,48 @@ Example format:
 
         return modified_path, param_values
 
+    def _extract_request_body(self, request_body_schema, query):
+        """
+        Extract request body values from the query based on the schema.
+        Returns the populated request body JSON.
+        """
+        if not request_body_schema:
+            return {}
+
+        try:
+            # Parse YAML schema to dict
+            schema_dict = yaml.safe_load(request_body_schema)
+        except yaml.YAMLError:
+            return {}
+
+        # Create a prompt to extract request body values
+        schema_prompt = f"""Given the following query and request body schema, extract the values for each field.
+        
+Query: {query}
+Request Body Schema:
+{yaml.dump(schema_dict, default_flow_style=False)}
+
+Return a JSON object with field names and their values. Only include fields that have values in the query.
+Example format:
+{{
+    "field_name": "extracted_value"
+}}
+"""
+        # Get request body values from LLM
+        response = ollama.chat(
+            model=self.model,
+            messages=[
+                {'role': 'system', 'content': 'You are a request body extractor. Extract values for request body fields from the given query.'},
+                {'role': 'user', 'content': schema_prompt}
+            ],
+            options={"temperature": 0.0}
+        )
+
+        try:
+            return json.loads(response['message']['content'])
+        except json.JSONDecodeError:
+            return {}
+
     def get_response(self, query):
         # First, try to find relevant information from vector database
         api_match = self.embedding_handler.search_similar(query)
@@ -73,15 +116,22 @@ Example format:
             full_path = api_match['full_path']
             modified_path, param_values = self._replace_url_parameters(full_path, query)
             
+            # Extract request body if present
+            request_body = {}
+            if api_match.get('request_body'):
+                request_body = self._extract_request_body(api_match['request_body'], query)
+            
             user_message += f"Relevant API information:\n"
             user_message += f"- API: {api_match['name']}\n"
             user_message += f"- Method: {api_match['method']}\n"
             user_message += f"- Full URL: {modified_path}\n"
             if param_values:
                 user_message += f"- URL Parameters: {json.dumps(param_values, indent=2)}\n"
+            if request_body:
+                user_message += f"- Request Body: {json.dumps(request_body, indent=2)}\n"
             user_message += f"- Summary: {api_match['summary']}\n"
             user_message += f"- Description: {api_match['description']}\n"
-                 
+        
         # Get response from LLM
         response = ollama.chat(
             model=self.model,

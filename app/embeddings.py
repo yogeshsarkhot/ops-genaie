@@ -1,11 +1,35 @@
 import chromadb
 import ollama
 import json
+import yaml
+import os
 
 class EmbeddingHandler:
     def __init__(self, chroma_path="chroma_data"):
-        self.client = chromadb.PersistentClient(path=chroma_path)
-        self.collection = self.client.get_or_create_collection("api_embeddings")
+        # Ensure the directory exists
+        os.makedirs(chroma_path, exist_ok=True)
+        
+        # Initialize ChromaDB with explicit settings
+        settings = chromadb.config.Settings(
+            is_persistent=True,
+            persist_directory=chroma_path,
+            anonymized_telemetry=False
+        )
+        
+        try:
+            self.client = chromadb.PersistentClient(
+                path=chroma_path,
+                settings=settings
+            )
+            self.collection = self.client.get_or_create_collection(
+                name="api_embeddings",
+                metadata={"hnsw:space": "cosine"}
+            )
+        except Exception as e:
+            print(f"Warning: Could not initialize ChromaDB: {str(e)}")
+            # Create a dummy client that will fail gracefully
+            self.client = None
+            self.collection = None
 
     def create_embedding(self, api_data):
         # Create a comprehensive text representation of the API
@@ -37,8 +61,13 @@ class EmbeddingHandler:
         # Add request body
         if api_data['request_body']:
             text_parts.append("Request Body:")
-            request_body_text = self._format_schema(api_data['request_body'])
-            text_parts.append(request_body_text)
+            # Parse YAML string back to dict for formatting
+            try:
+                request_body_dict = yaml.safe_load(api_data['request_body'])
+                request_body_text = self._format_schema(request_body_dict)
+                text_parts.append(request_body_text)
+            except yaml.YAMLError:
+                text_parts.append(api_data['request_body'])
 
         # Add response schemas
         if api_data['response_schemas']:
@@ -49,8 +78,13 @@ class EmbeddingHandler:
                     f"  Description: {response['description']}"
                 ]
                 if response.get('schema'):
-                    schema_text = self._format_schema(response['schema'])
-                    response_text.append(f"  Schema: {schema_text}")
+                    # Parse YAML string back to dict for formatting
+                    try:
+                        schema_dict = yaml.safe_load(response['schema'])
+                        schema_text = self._format_schema(schema_dict)
+                        response_text.append(f"  Schema: {schema_text}")
+                    except yaml.YAMLError:
+                        response_text.append(f"  Schema: {response['schema']}")
                 text_parts.append('\n'.join(response_text))
 
         # Combine all text parts
@@ -59,30 +93,32 @@ class EmbeddingHandler:
         # Create embedding
         embedding = ollama.embeddings(model="nomic-embed-text", prompt=text)['embedding']
         
-        # Prepare metadata
+        # Prepare metadata - convert complex types to JSON strings
         metadata = {
-            'name': api_data['name'],
-            'method': api_data['method'],
-            'full_path': api_data['full_path'],
-            'base_url': api_data['base_url'],
-            'summary': api_data['summary'],
-            'description': api_data['description'],
-            'operation_id': api_data['operation_id'],
-            'tags': json.dumps(api_data['tags']),
-            'parameters': json.dumps(api_data['parameters']),
-            'request_body': json.dumps(api_data['request_body']),
-            'response_schemas': json.dumps(api_data['response_schemas']),
-            'openapi_version': api_data['openapi_version'],
-            'api_title': api_data['api_title'],
-            'api_description': api_data['api_description'],
-            'api_version': api_data['api_version']
+            'name': str(api_data['name']),
+            'method': str(api_data['method']),
+            'full_path': str(api_data['full_path']),
+            'base_url': str(api_data['base_url']),
+            'summary': str(api_data['summary']),
+            'description': str(api_data['description']),
+            'operation_id': str(api_data['operation_id']),
+            'tags': json.dumps(api_data['tags']),  # Convert list to JSON string
+            'parameters': json.dumps(api_data['parameters']),  # Convert list to JSON string
+            'request_body': str(api_data['request_body']),  # Already a string
+            'response_schemas': json.dumps(api_data['response_schemas']),  # Convert dict to JSON string
+            'openapi_version': str(api_data['openapi_version']),
+            'api_title': str(api_data['api_title']),
+            'api_description': str(api_data['api_description']),
+            'api_version': str(api_data['api_version'])
         }
         
-        self.collection.add(
-            embeddings=[embedding],
-            metadatas=[metadata],
-            ids=[f"{api_data['name']}_{api_data['method']}"]
-        )
+        # Only add to collection if client is initialized
+        if self.client and self.collection:
+            self.collection.add(
+                embeddings=[embedding],
+                metadatas=[metadata],
+                ids=[f"{api_data['name']}_{api_data['method']}"]
+            )
 
     def _format_schema(self, schema):
         """Format schema into a readable text representation."""
@@ -140,14 +176,21 @@ class EmbeddingHandler:
         return str(schema)
 
     def search_similar(self, query):
+        if not self.client or not self.collection:
+            return None
+            
         query_embedding = ollama.embeddings(model="nomic-embed-text", prompt=query)['embedding']
         results = self.collection.query(query_embeddings=[query_embedding], n_results=1)
+        
         if results['metadatas'] and results['metadatas'][0]:
             metadata = results['metadatas'][0][0]
-            # Deserialize JSON fields
-            metadata['tags'] = json.loads(metadata['tags'])
-            metadata['parameters'] = json.loads(metadata['parameters'])
-            metadata['request_body'] = json.loads(metadata['request_body'])
-            metadata['response_schemas'] = json.loads(metadata['response_schemas'])
-            return metadata
+            try:
+                # Deserialize JSON fields
+                metadata['tags'] = json.loads(metadata['tags'])
+                metadata['parameters'] = json.loads(metadata['parameters'])
+                metadata['response_schemas'] = json.loads(metadata['response_schemas'])
+                return metadata
+            except json.JSONDecodeError as e:
+                print(f"Error deserializing metadata: {e}")
+                return None
         return None
