@@ -222,6 +222,9 @@ If no relevant API is found, return null.
                     if request_body_dict:
                         # Extract values from query
                         request_body_dict = self._extract_request_body_values(query, request_body_dict)
+                        # Store the request body as a dictionary for API calls
+                        api_data['request_body_dict'] = request_body_dict
+                        # Format the request body for display
                         request_body = json.dumps(request_body_dict, indent=2)
                 except (yaml.YAMLError, json.JSONDecodeError):
                     request_body = api_data['request_body']

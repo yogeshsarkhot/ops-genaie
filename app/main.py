@@ -63,64 +63,114 @@ def main():
                         
                         # Parse the response to extract API details
                         api_details = {}
+                        current_key = None
+                        current_value = []
+                        
                         for line in response_text.split('\n'):
+                            line = line.strip()
+                            if not line:
+                                continue
+                                
                             if line.startswith('-'):
-                                key, value = line[2:].split(':', 1)
-                                api_details[key.strip()] = value.strip()
+                                # If we have a previous key-value pair, save it
+                                if current_key and current_value:
+                                    api_details[current_key] = ' '.join(current_value)
+                                    current_value = []
+                                
+                                # Start new key-value pair
+                                parts = line[2:].split(':', 1)
+                                if len(parts) == 2:
+                                    current_key = parts[0].strip()
+                                    current_value = [parts[1].strip()]
+                            elif current_key:
+                                # Continue building the current value
+                                current_value.append(line)
+                        
+                        # Save the last key-value pair
+                        if current_key and current_value:
+                            api_details[current_key] = ' '.join(current_value)
                         
                         # Make API call
                         if st.button("Call API"):
                             try:
-                                # Prepare URL with parameters
-                                url = api_details.get('API Full Path with parameters')
-                                if not url:
-                                    st.error("No URL found in response")
-                                    return
-                                    
-                                params = {}
-                                headers = {'Content-Type': 'application/json'}
+                                # Prepare API data for the call
+                                api_data = {
+                                    'method': api_details.get('API Method', '').upper(),
+                                    'full_path_with_params': api_details.get('API Full Path with parameters', ''),
+                                    'request_body_dict': None
+                                }
                                 
-                                # Prepare request body
-                                request_body = None
+                                # Parse request body if present
                                 request_body_str = api_details.get('API Request Body')
                                 if request_body_str and request_body_str != 'None':
                                     try:
-                                        request_body = json.loads(request_body_str)
-                                    except json.JSONDecodeError:
-                                        st.error("Invalid request body format")
+                                        # Clean up the request body string
+                                        request_body_str = request_body_str.strip()
+                                        # Parse the JSON
+                                        api_data['request_body_dict'] = json.loads(request_body_str)
+                                    except json.JSONDecodeError as e:
+                                        st.error(f"Error parsing request body: {str(e)}")
+                                        st.write(f"Request body string: {request_body_str}")
                                         return
                                 
-                                # Make the API call based on method
-                                method = api_details.get('API Method', '').upper()
-                                if method == 'GET':
-                                    api_response = requests.get(url, params=params, headers=headers)
-                                elif method == 'POST':
-                                    api_response = requests.post(url, params=params, json=request_body, headers=headers)
-                                elif method == 'PUT':
-                                    api_response = requests.put(url, params=params, json=request_body, headers=headers)
-                                elif method == 'DELETE':
-                                    api_response = requests.delete(url, params=params, headers=headers)
-                                else:
-                                    st.error(f"Unsupported HTTP method: {method}")
-                                    return
+                                # Call the API
+                                response = call_api(api_data)
                                 
                                 # Display API response
                                 st.subheader("API Response")
-                                st.write(f"**Status Code:** {api_response.status_code}")
-                                
-                                try:
-                                    response_json = api_response.json()
-                                    st.json(response_json)
-                                except ValueError:
-                                    st.write(api_response.text)
+                                if 'error' in response:
+                                    st.error(f"Error: {response['error']}")
+                                else:
+                                    st.write(f"**Status Code:** {response['status_code']}")
+                                    if response['body']:
+                                        st.json(response['body'])
+                                    else:
+                                        st.write("No response body")
                                     
-                            except requests.exceptions.RequestException as e:
-                                st.error(f"Error making API call: {str(e)}")
                             except Exception as e:
-                                st.error(f"Unexpected error: {str(e)}")
+                                st.error(f"Error making API call: {str(e)}")
                     except Exception as e:
                         st.error(f"Error processing response: {str(e)}")
                         st.write("Raw response:", response_text)
+
+def call_api(api_data):
+    """Call the API with the given data."""
+    try:
+        # Extract API details
+        method = api_data['method']
+        url = api_data['full_path_with_params']
+        
+        # Prepare headers
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        
+        # Prepare request body for POST/PUT requests
+        data = None
+        if method in ['POST', 'PUT'] and 'request_body_dict' in api_data:
+            data = api_data['request_body_dict']
+        
+        # Make the API call
+        response = requests.request(
+            method=method,
+            url=url,
+            headers=headers,
+            json=data  # Use json parameter for proper JSON serialization
+        )
+        
+        # Return the response
+        return {
+            'status_code': response.status_code,
+            'headers': dict(response.headers),
+            'body': response.json() if response.text else None
+        }
+        
+    except Exception as e:
+        return {
+            'error': str(e),
+            'status_code': 500
+        }
 
 if __name__ == "__main__":
     main()
