@@ -107,11 +107,78 @@ Example format:
             similar_api = self.embedding_handler.search_similar(query)
             
             if similar_api:
-                # Format the response based on the API details
-                response = self._format_api_response(similar_api, query)
-                return response
+                try:
+                    # Format the response based on the API details
+                    response = self._format_api_response(similar_api, query)
+                    return response
+                except Exception as e:
+                    print(f"Error formatting API response: {str(e)}")
+                    return f"Error processing API response: {str(e)}"
             else:
-                return "No matching API found for your query."
+                # If no similar API found, try to find a relevant API using LLM
+                prompt = f"""Given the following query, find the most relevant API endpoint from the available APIs.
+                
+Query: {query}
+
+Return a JSON object with the following structure:
+{{
+    "api_name": "name of the API",
+    "method": "HTTP method",
+    "description": "brief description of what the API does"
+}}
+
+If no relevant API is found, return null.
+"""
+                response = ollama.chat(
+                    model=self.model,
+                    messages=[
+                        {'role': 'system', 'content': 'You are an API finder. Find the most relevant API endpoint for the given query.'},
+                        {'role': 'user', 'content': prompt}
+                    ],
+                    options={"temperature": 0.0}
+                )
+                
+                try:
+                    api_info = json.loads(response['message']['content'])
+                    if api_info:
+                        # Try to find the API in the database
+                        with self.db.conn.cursor() as cur:
+                            cur.execute(
+                                """SELECT * FROM api_data 
+                                WHERE name ILIKE %s 
+                                OR description ILIKE %s 
+                                OR summary ILIKE %s 
+                                LIMIT 1""",
+                                (f"%{api_info['api_name']}%", 
+                                 f"%{api_info['description']}%",
+                                 f"%{api_info['description']}%")
+                            )
+                            api_data = cur.fetchone()
+                            
+                            if api_data:
+                                # Convert the database row to a dictionary
+                                api_dict = {
+                                    'name': api_data[2],
+                                    'method': api_data[3],
+                                    'summary': api_data[4],
+                                    'description': api_data[5],
+                                    'parameters': json.loads(api_data[9]),
+                                    'request_body': api_data[10],
+                                    'response_schemas': json.loads(api_data[11]),
+                                    'base_url': api_data[7],
+                                    'full_path': api_data[8],
+                                    'operation_id': api_data[6],
+                                    'tags': json.loads(api_data[12]),
+                                    'openapi_version': api_data[13],
+                                    'api_title': api_data[14],
+                                    'api_description': api_data[15],
+                                    'api_version': api_data[16]
+                                }
+                                return self._format_api_response(api_dict, query)
+                    
+                    return "No matching API found for your query. Please try rephrasing your query or check if the API documentation has been uploaded."
+                except json.JSONDecodeError:
+                    return "Error processing your query. Please try again."
                 
         except Exception as e:
             print(f"Error in get_response: {str(e)}")
@@ -205,46 +272,76 @@ Example format:
     def _extract_request_body_values(self, query, request_body):
         """Extract request body values from user query."""
         try:
-            # Convert the request body to a flat dictionary for easier processing
-            flat_body = {}
-            self._flatten_dict(request_body, flat_body)
+            # If request_body is a schema, extract the properties
+            if isinstance(request_body, dict) and 'properties' in request_body:
+                properties = request_body['properties']
+            else:
+                properties = request_body
+
+            # Create a more detailed prompt for the LLM
+            prompt = f"""Given the following user query and request body schema, extract the values for each field.
             
-            # Extract values for each field
-            for field, value in flat_body.items():
-                if isinstance(value, str):
-                    # Look for the field name in the query
-                    natural_name = field.replace('_', ' ').lower()
-                    pattern = rf"{natural_name}\s+([^,]+)"
-                    match = re.search(pattern, query.lower())
-                    if match:
-                        flat_body[field] = match.group(1).strip()
-            
-            # Reconstruct the nested structure
-            return self._unflatten_dict(flat_body)
+User Query: {query}
+
+Request Body Schema:
+{json.dumps(properties, indent=2)}
+
+Your task is to:
+1. Read the user query carefully
+2. Identify any values mentioned in the query that match the fields in the schema
+3. Return a JSON object with ONLY the fields that have values in the query
+4. Use the exact field names from the schema
+5. Convert any values to the appropriate type (string, number, boolean)
+
+Example:
+If the schema has fields "name", "age", "is_active" and the query is "Create a user named John who is 25 years old",
+you should return:
+{{
+    "name": "John",
+    "age": 25
+}}
+
+Return ONLY the JSON object with the extracted values. Do not include any explanations or additional text.
+"""
+            # Get values from LLM
+            response = ollama.chat(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': 'You are a request body extractor. Extract values for request body fields from the given query.'},
+                    {'role': 'user', 'content': prompt}
+                ],
+                options={"temperature": 0.0}
+            )
+
+            try:
+                # Extract the JSON content from the response
+                content = response['message']['content'].strip()
+                
+                # Remove any markdown code block markers if present
+                if content.startswith('```json'):
+                    content = content[7:]
+                if content.endswith('```'):
+                    content = content[:-3]
+                content = content.strip()
+                
+                # Parse the JSON response
+                extracted_values = json.loads(content)
+                
+                # Create a clean request body with only the extracted values
+                clean_request_body = {}
+                for field, value in extracted_values.items():
+                    if value is not None:  # Only include fields with values
+                        clean_request_body[field] = value
+                
+                return clean_request_body
+            except json.JSONDecodeError as e:
+                print(f"Error parsing LLM response for request body values: {str(e)}")
+                print(f"LLM Response: {response['message']['content']}")
+                return {}
+                
         except Exception as e:
             print(f"Error extracting request body values: {str(e)}")
-            return request_body
-
-    def _flatten_dict(self, d, flat_dict, prefix=''):
-        """Flatten a nested dictionary."""
-        for k, v in d.items():
-            if isinstance(v, dict):
-                self._flatten_dict(v, flat_dict, f"{prefix}{k}.")
-            else:
-                flat_dict[f"{prefix}{k}"] = v
-
-    def _unflatten_dict(self, flat_dict):
-        """Convert a flat dictionary back to a nested structure."""
-        result = {}
-        for k, v in flat_dict.items():
-            parts = k.split('.')
-            current = result
-            for part in parts[:-1]:
-                if part not in current:
-                    current[part] = {}
-                current = current[part]
-            current[parts[-1]] = v
-        return result
+            return {}
 
     def get_history(self):
         return self.db.get_query_history()
