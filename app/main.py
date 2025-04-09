@@ -3,6 +3,8 @@ from app.database import Database
 from app.file_processor import FileProcessor
 from app.embeddings import EmbeddingHandler
 from app.llm_handler import LLMHandler
+import json
+import requests
 
 def main():
     st.set_page_config(page_title="API Analyzer", layout="wide")
@@ -15,7 +17,7 @@ def main():
     llm = LLMHandler()
 
     # Tabs
-    tab1, tab2 = st.tabs(["Upload Files", "Query LLM"])
+    tab1, tab2 = st.tabs(["Upload Files", "API Testing"])
 
     # Tab 1: File Upload
     with tab1:
@@ -41,32 +43,84 @@ def main():
                 st.success("File processed successfully!")
                 st.rerun()
 
-    # Tab 2: LLM Query
+    # Tab 2: API Testing
     with tab2:
-        st.header("Query LLM")
+        st.header("API Testing")
         
-        # Query input
-        query = st.text_area("Enter your query")
-        if st.button("Submit Query"):
+        # Get user query
+        user_query = st.text_input("Enter your query:", key="api_test_query")
+        
+        if user_query:
             with st.spinner("Processing query..."):
-                # Get LLM response
-                llm_response = llm.get_response(query)
+                # Get response from LLM
+                response_text = llm.get_response(user_query)
                 
-                # Find relevant API
-                api_match = embedding_handler.search_similar(query)
-                
-                # Display results
-                st.write("LLM Response:", llm_response)
-                if api_match:
-                    st.subheader("Relevant API Found:")
-                    st.json(api_match)
-
-        # Display history
-        st.subheader("Query History")
-        for entry in llm.get_history():
-            st.write(f"Q: {entry['query']}")
-            st.write(f"A: {entry['response']}")
-            st.markdown("---")
+                if response_text:
+                    try:
+                        # Display the API details
+                        st.subheader("API Details")
+                        st.markdown(response_text)
+                        
+                        # Parse the response to extract API details
+                        api_details = {}
+                        for line in response_text.split('\n'):
+                            if line.startswith('-'):
+                                key, value = line[2:].split(':', 1)
+                                api_details[key.strip()] = value.strip()
+                        
+                        # Make API call
+                        if st.button("Call API"):
+                            try:
+                                # Prepare URL with parameters
+                                url = api_details.get('API Full Path with parameters')
+                                if not url:
+                                    st.error("No URL found in response")
+                                    return
+                                    
+                                params = {}
+                                headers = {'Content-Type': 'application/json'}
+                                
+                                # Prepare request body
+                                request_body = None
+                                request_body_str = api_details.get('API Request Body')
+                                if request_body_str and request_body_str != 'None':
+                                    try:
+                                        request_body = json.loads(request_body_str)
+                                    except json.JSONDecodeError:
+                                        st.error("Invalid request body format")
+                                        return
+                                
+                                # Make the API call based on method
+                                method = api_details.get('API Method', '').upper()
+                                if method == 'GET':
+                                    api_response = requests.get(url, params=params, headers=headers)
+                                elif method == 'POST':
+                                    api_response = requests.post(url, params=params, json=request_body, headers=headers)
+                                elif method == 'PUT':
+                                    api_response = requests.put(url, params=params, json=request_body, headers=headers)
+                                elif method == 'DELETE':
+                                    api_response = requests.delete(url, params=params, headers=headers)
+                                else:
+                                    st.error(f"Unsupported HTTP method: {method}")
+                                    return
+                                
+                                # Display API response
+                                st.subheader("API Response")
+                                st.write(f"**Status Code:** {api_response.status_code}")
+                                
+                                try:
+                                    response_json = api_response.json()
+                                    st.json(response_json)
+                                except ValueError:
+                                    st.write(api_response.text)
+                                    
+                            except requests.exceptions.RequestException as e:
+                                st.error(f"Error making API call: {str(e)}")
+                            except Exception as e:
+                                st.error(f"Unexpected error: {str(e)}")
+                    except Exception as e:
+                        st.error(f"Error processing response: {str(e)}")
+                        st.write("Raw response:", response_text)
 
 if __name__ == "__main__":
     main()
