@@ -121,11 +121,26 @@ def main():
                                 if 'error' in response:
                                     st.error(f"Error: {response['error']}")
                                 else:
+                                    # Display status code
                                     st.write(f"**Status Code:** {response['status_code']}")
+                                    
+                                    # Get summary from LLM
+                                    with st.spinner("Summarizing response..."):
+                                        summary = llm.summarize_api_response(response)
+                                        st.subheader("Response Summary")
+                                        st.write(summary)
+                                    
+                                    # Display detailed response
+                                    st.subheader("Detailed Response")
                                     if response['body']:
                                         st.json(response['body'])
                                     else:
                                         st.write("No response body")
+                                    
+                                    # Display headers if present
+                                    if response.get('headers'):
+                                        st.subheader("Response Headers")
+                                        st.json(response['headers'])
                                     
                             except Exception as e:
                                 st.error(f"Error making API call: {str(e)}")

@@ -348,3 +348,38 @@ Return ONLY the JSON object with the extracted values. Do not include any explan
 
     def get_history(self):
         return self.db.get_query_history()
+
+    def summarize_api_response(self, api_response):
+        """Summarize API response in plain English."""
+        try:
+            # Format the response for the LLM
+            response_text = f"""API Response:
+Status Code: {api_response.get('status_code')}
+Headers: {json.dumps(api_response.get('headers', {}), indent=2)}
+Body: {json.dumps(api_response.get('body', {}), indent=2)}
+"""
+            
+            # Create prompt for summarization
+            prompt = f"""Please summarize the following API response in plain English. 
+Focus on explaining what the response means and any important information it contains.
+Keep the summary concise but informative.
+
+{response_text}
+
+Summary:"""
+            
+            # Get summary from LLM
+            response = ollama.chat(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': 'You are an API response summarizer. Explain API responses in clear, plain English.'},
+                    {'role': 'user', 'content': prompt}
+                ],
+                options={"temperature": 0.0}
+            )
+            
+            return response['message']['content'].strip()
+            
+        except Exception as e:
+            print(f"Error summarizing API response: {str(e)}")
+            return "Unable to summarize the API response."
