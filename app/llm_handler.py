@@ -7,7 +7,8 @@ import yaml
 
 class LLMHandler:
     def __init__(self):
-        self.model = "llama3"
+        #self.model = "llama3"
+        self.model = "llama3-groq-tool-use"
         self.db = Database()
         self.embedding_handler = EmbeddingHandler()
 
@@ -290,19 +291,24 @@ Request Body Schema:
 {json.dumps(properties, indent=2)}
 
 Your task is to:
+
 1. Read the user query carefully
 2. Identify any values mentioned in the query that match the fields in the schema
-3. Return a JSON object with ONLY the fields that have values in the query
+3. Return a JSON object with the fields that have values in the query
 4. Use the exact field names from the schema
 5. Convert any values to the appropriate type (string, number, boolean)
 
 Example:
-If the schema has fields "name", "age", "is_active" and the query is "Create a user named John who is 25 years old",
+If the schema has fields "name", "address_line1", "address_line2", "city", "state", "zip_code" and the query is "Create an account for Neo Corp located at 250 Main Street, Suite 250, Avon, CT, 06001",
 you should return:
-{{
-    "name": "John",
-    "age": 25
-}}
+{{{{
+  "name": "Neo Corp",
+  "address_line1": "250 Main Street",
+  "address_line2": "Suite 250",
+  "city": "Avon",
+  "state": "CT",
+  "zip_code": "06001"
+}}}}
 
 Return ONLY the JSON object with the extracted values. Do not include any explanations or additional text.
 """
