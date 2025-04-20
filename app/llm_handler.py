@@ -1,16 +1,19 @@
 import ollama
 from app.database import Database
-from app.embeddings import EmbeddingHandler
 import json
 import re
 import yaml
+import logging
 
 class LLMHandler:
     def __init__(self):
         #self.model = "llama3"
         self.model = "llama3-groq-tool-use"
         self.db = Database()
-        self.embedding_handler = EmbeddingHandler()
+        self._tool_registry = None
+
+    def set_tools(self, tool_registry):
+        self._tool_registry = tool_registry
 
     def _replace_url_parameters(self, full_path, query):
         """
@@ -101,89 +104,154 @@ Example format:
         except json.JSONDecodeError:
             return {}
 
-    def get_response(self, query):
-        """Get response from LLM and find relevant API."""
+    def get_response(self, query, tools=None):
+        """Get response from LLM and find relevant API using dynamic tools."""
+        if tools is not None:
+            self.set_tools(tools)
+        if not self._tool_registry:
+            return "No tools available for query."
+
+        # Gather tool metadata for LLM prompt
+        tool_infos = []
+        for tool_name, tool_func in self._tool_registry.items():
+            api = getattr(tool_func, '__api_metadata__', None)
+            if api is None:
+                # Fallback: try to get from main's tool_registry
+                api = getattr(tool_func, 'api_metadata', None)
+            if api is None:
+                # As a last resort, try to reconstruct minimal info
+                tool_infos.append({
+                    'tool_name': tool_name,
+                    'method': 'UNKNOWN',
+                    'path': 'UNKNOWN',
+                    'summary': '',
+                    'description': '',
+                    'parameters': [],
+                    'request_body': None
+                })
+                continue
+            info = {
+                'tool_name': tool_name,
+                'method': api.get('method'),
+                'path': api.get('full_path'),
+                'summary': api.get('summary', ''),
+                'description': api.get('description', ''),
+                'parameters': [p['name'] for p in api.get('parameters', [])],
+                'request_body': api.get('request_body') if api.get('request_body') and api.get('request_body') != '{}' else None
+            }
+            tool_infos.append(info)
+
+        if not tool_infos:
+            return f"No tool metadata found. Tool registry: {list(self._tool_registry.keys())}"
+
+        # Build LLM prompt
+        prompt = """You are an API assistant. You have access to the following API tools.\n"""
+        for tool in tool_infos:
+            prompt += f"\nTool Name: {tool['tool_name']}\nMethod: {tool['method']}\nPath: {tool['path']}\nSummary: {tool['summary']}\nDescription: {tool['description']}\nParameters: {tool['parameters']}"
+            if tool['request_body']:
+                prompt += f"\nRequest Body Schema: {tool['request_body']}"
+            prompt += "\n---"
+        prompt += f"\n\nUser Query: {query}\n\n"
+        prompt += """Based on the user query and available tools, select the best tool to call.\nReturn ONLY a JSON object in the following format:\n{\n  \"tool_name\": <tool_name>,\n  \"parameters\": {<param_name>: <value>, ...},\n  \"request_body\": <dict or null>\n}\nIf no tool matches, return null.\n\nExamples:\nSimple:\n{\n  \"tool_name\": \"GET__accounts\",\n  \"parameters\": {\"skip\": 0, \"limit\": 10},\n  \"request_body\": null\n}\nComplex:\n{\n  \"tool_name\": \"POST__accounts\",\n  \"parameters\": {},\n  \"request_body\": {\n    \"name\": \"Acme Corporation\",\n    \"address_line1\": \"123 Main St\",\n    \"address_line2\": \"Suite 456\",\n    \"city\": \"Anytown\",\n    \"state\": \"CA\",\n    \"zip_code\": \"90210\"\n  }\n}\n\nReturn ONLY the JSON object, and nothing else. Do not include any explanation, Markdown, or extra text.\n"""
+
+        # Call LLM
+        response = ollama.chat(
+            model=self.model,
+            messages=[
+                {'role': 'system', 'content': 'You are an API assistant.'},
+                {'role': 'user', 'content': prompt}
+            ],
+            options={"temperature": 0.0}
+        )
         try:
-            # Get similar API from embeddings
-            similar_api = self.embedding_handler.search_similar(query)
-            
-            if similar_api:
-                try:
-                    # Format the response based on the API details
-                    response = self._format_api_response(similar_api, query)
-                    return response
-                except Exception as e:
-                    print(f"Error formatting API response: {str(e)}")
-                    return f"Error processing API response: {str(e)}"
-            else:
-                # If no similar API found, try to find a relevant API using LLM
-                prompt = f"""Given the following query, find the most relevant API endpoint from the available APIs.
-                
-Query: {query}
+            content = response['message']['content'].strip()
+            logging.info(f"Raw LLM response: {content}")
 
-Return a JSON object with the following structure:
-{{
-    "api_name": "name of the API",
-    "method": "HTTP method",
-    "description": "brief description of what the API does"
-}}
+            # Extract all complete JSON objects using brace counting
+            def extract_all_json(text):
+                results = []
+                i = 0
+                while i < len(text):
+                    if text[i] == '{':
+                        start = i
+                        brace_count = 1
+                        i += 1
+                        while i < len(text) and brace_count > 0:
+                            if text[i] == '{':
+                                brace_count += 1
+                            elif text[i] == '}':
+                                brace_count -= 1
+                            i += 1
+                        if brace_count == 0:
+                            results.append(text[start:i])
+                        else:
+                            break
+                    else:
+                        i += 1
+                return results
 
-If no relevant API is found, return null.
-"""
-                response = ollama.chat(
-                    model=self.model,
-                    messages=[
-                        {'role': 'system', 'content': 'You are an API finder. Find the most relevant API endpoint for the given query.'},
-                        {'role': 'user', 'content': prompt}
-                    ],
-                    options={"temperature": 0.0}
-                )
-                
+            json_candidates = extract_all_json(content)
+            logging.info(f"JSON candidates found: {json_candidates}")
+            result = None
+            json_str = None
+            for candidate in json_candidates:
                 try:
-                    api_info = json.loads(response['message']['content'])
-                    if api_info:
-                        # Try to find the API in the database
-                        with self.db.conn.cursor() as cur:
-                            cur.execute(
-                                """SELECT * FROM api_data 
-                                WHERE name ILIKE %s 
-                                OR description ILIKE %s 
-                                OR summary ILIKE %s 
-                                LIMIT 1""",
-                                (f"%{api_info['api_name']}%", 
-                                 f"%{api_info['description']}%",
-                                 f"%{api_info['description']}%")
-                            )
-                            api_data = cur.fetchone()
-                            
-                            if api_data:
-                                # Convert the database row to a dictionary
-                                api_dict = {
-                                    'name': api_data[2],
-                                    'method': api_data[3],
-                                    'summary': api_data[4],
-                                    'description': api_data[5],
-                                    'parameters': json.loads(api_data[9]),
-                                    'request_body': api_data[10],
-                                    'response_schemas': json.loads(api_data[11]),
-                                    'base_url': api_data[7],
-                                    'full_path': api_data[8],
-                                    'operation_id': api_data[6],
-                                    'tags': json.loads(api_data[12]),
-                                    'openapi_version': api_data[13],
-                                    'api_title': api_data[14],
-                                    'api_description': api_data[15],
-                                    'api_version': api_data[16]
-                                }
-                                return self._format_api_response(api_dict, query)
-                    
-                    return "No matching API found for your query. Please try rephrasing your query or check if the API documentation has been uploaded."
-                except json.JSONDecodeError:
-                    return "Error processing your query. Please try again."
-                
+                    result = json.loads(candidate)
+                    json_str = candidate
+                    break
+                except Exception as parse_exc:
+                    logging.info(f"Candidate failed JSON parsing: {candidate} | Error: {parse_exc}")
+            if result is None:
+                logging.error(f"No valid JSON object found in LLM response. Candidates: {json_candidates}")
+                return f"No valid JSON object found in LLM response. The LLM likely returned an explanation or list instead of a JSON object. Please rephrase your query or check the API schema.\nRaw response: {content}"
+            logging.info(f"Extracted JSON string: {json_str}")
+            if not result:
+                return "No matching API tool found for your query."
+            tool_name = result.get('tool_name')
+            params = result.get('parameters', {})
+            request_body = result.get('request_body', None)
+            tool_func = self._tool_registry.get(tool_name)
+            if tool_func is None:
+                logging.error(f"Tool '{tool_name}' not found. Registry: {list(self._tool_registry.keys())}")
+                return f"Tool '{tool_name}' not found."
+            # Cast parameter types based on API metadata
+            api_meta = getattr(tool_func, '__api_metadata__', None)
+            if api_meta:
+                param_schemas = {p['name']: p.get('schema', {}) for p in api_meta.get('parameters', [])}
+                for k, v in params.items():
+                    schema = param_schemas.get(k, {})
+                    expected_type = schema.get('type')
+                    if expected_type == 'integer' and not isinstance(v, int):
+                        try:
+                            params[k] = int(v)
+                            logging.info(f"Casted parameter '{k}' to int: {params[k]}")
+                        except Exception as e:
+                            logging.warning(f"Failed to cast parameter '{k}' value '{v}' to int: {e}")
+                    elif expected_type == 'number' and not isinstance(v, float):
+                        try:
+                            params[k] = float(v)
+                            logging.info(f"Casted parameter '{k}' to float: {params[k]}")
+                        except Exception as e:
+                            logging.warning(f"Failed to cast parameter '{k}' value '{v}' to float: {e}")
+                    elif expected_type == 'boolean' and not isinstance(v, bool):
+                        try:
+                            if str(v).lower() in ['true', '1', 'yes']:
+                                params[k] = True
+                            elif str(v).lower() in ['false', '0', 'no']:
+                                params[k] = False
+                            logging.info(f"Casted parameter '{k}' to bool: {params[k]}")
+                        except Exception as e:
+                            logging.warning(f"Failed to cast parameter '{k}' value '{v}' to bool: {e}")
+            # Call the selected tool
+            kwargs = params.copy()
+            if request_body:
+                kwargs['request_body'] = request_body
+            api_result = tool_func(**kwargs)
+            logging.info(f"Tool called: {tool_name} | Result: {api_result}")
+            return f"Tool called: {tool_name}\nResult: {api_result}"
         except Exception as e:
-            print(f"Error in get_response: {str(e)}")
-            return f"Error processing your query: {str(e)}"
+            logging.error(f"General error in get_response: {e}")
+            return f"Error processing LLM response: {str(e)}\nRaw response: {response['message']['content']}"
 
     def _format_api_response(self, api_data, query):
         """Format the API response in the requested format."""
