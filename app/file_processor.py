@@ -102,51 +102,33 @@ class FileProcessor:
         components = data.get('components', {})
         
         # Process paths
-        for path, path_data in data.get('paths', {}).items():
-            if not isinstance(path_data, dict):
-                continue
+        paths = data.get('paths', {})
+        for path, path_item in paths.items():
+            for method, method_data in path_item.items():
+                # Skip if method_data is not a dict (e.g., if it's a list or something else)
+                if not isinstance(method_data, dict):
+                    continue
+                operation_id = method_data.get('operationId', None)
+                summary = method_data.get('summary', '')
+                description = method_data.get('description', '')
+                tags = method_data.get('tags', [])
 
-            # Extract path-level parameters
-            path_parameters = []
-            for param in path_data.get('parameters', []):
-                if isinstance(param, dict):
-                    param_dict = {
+                # Extract parameters
+                path_parameters = path_item.get('parameters', [])
+                operation_parameters = method_data.get('parameters', [])
+                operation_parameters = operation_parameters if isinstance(operation_parameters, list) else []
+                path_parameters = path_parameters if isinstance(path_parameters, list) else []
+                # Normalize parameter dicts
+                def normalize_param(param):
+                    return {
                         'name': param.get('name', ''),
                         'in': param.get('in', ''),
                         'description': param.get('description', ''),
                         'required': param.get('required', False),
                         'schema': param.get('schema', {})
                     }
-                    path_parameters.append(param_dict)
-
-            for method, method_data in path_data.items():
-                if method.lower() not in ['get', 'post', 'put', 'delete', 'patch']:
-                    continue
-
-                # Handle case where method_data might be a list
-                if isinstance(method_data, list):
-                    method_data = next((item for item in method_data if isinstance(item, dict)), {})
-                elif not isinstance(method_data, dict):
-                    continue
-
-                # Extract operation details
-                operation_id = method_data.get('operationId', '')
-                summary = method_data.get('summary', '')
-                description = method_data.get('description', '')
-                tags = method_data.get('tags', [])
-                
-                # Extract operation-level parameters
-                operation_parameters = []
-                for param in method_data.get('parameters', []):
-                    if isinstance(param, dict):
-                        param_dict = {
-                            'name': param.get('name', ''),
-                            'in': param.get('in', ''),
-                            'description': param.get('description', ''),
-                            'required': param.get('required', False),
-                            'schema': param.get('schema', {})
-                        }
-                        operation_parameters.append(param_dict)
+                operation_parameters = [normalize_param(p) for p in operation_parameters]
+                path_parameters = [normalize_param(p) for p in path_parameters]
 
                 # Combine path and operation parameters
                 all_parameters = path_parameters.copy()

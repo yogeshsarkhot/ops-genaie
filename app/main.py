@@ -5,6 +5,7 @@ from app.llm_handler import LLMHandler
 import json
 import requests
 import logging
+import re
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -47,14 +48,12 @@ def main():
                 for api in apis:
                     def make_tool(api_def):
                         def tool_func(**kwargs):
-                            import requests
                             url = api_def['full_path']
                             method = api_def['method']
                             # Prepare parameters
                             params = {k: v for k, v in kwargs.items() if k in [p['name'] for p in api_def['parameters']]}
                             data = kwargs.get('request_body', None)
                             # Substitute path parameters in the URL
-                            import re
                             path_param_names = re.findall(r'\{([^{}]+)\}', url)
                             for pname in path_param_names:
                                 if pname in params:
@@ -85,7 +84,7 @@ def main():
 
     # Tab 2: API Testing
     with tab2:
-        st.header("API Testing")
+        st.header("API Execution")
         
         # Get user query
         user_query = st.text_input("Enter your query:", key="api_test_query")
@@ -94,18 +93,29 @@ def main():
             with st.spinner("Processing query..."):
                 # Pass dynamic tools from session state to LLMHandler
                 response_text = llm.get_response(user_query, tools=st.session_state['tool_registry'])
-                
-                if response_text.startswith("Tool called:"):
+                # Defensive: Handle None response gracefully
+                if response_text is None:
+                    st.error("No response returned from LLM. Please check logs or try again.")
+                elif response_text.startswith("Tool called:"):
                     # Parse tool name and API result
-                    import re
-                    tool_match = re.search(r"Tool called: (.*?)\\nResult: (.*)", response_text, re.DOTALL)
+                    tool_match = re.search(r"Tool called: (.*?)\nResult: (.*)", response_text, re.DOTALL)
                     if tool_match:
                         tool_name = tool_match.group(1)
                         api_result_raw = tool_match.group(2)
                         try:
-                            api_result = json.loads(api_result_raw.replace("'", '"')) if api_result_raw.strip().startswith('{') else api_result_raw
-                        except Exception:
-                            api_result = api_result_raw
+                            # Try to parse as JSON (Python dict with single quotes is not valid JSON)
+                            api_result = json.loads(api_result_raw)
+                        except json.JSONDecodeError:
+                            try:
+                                # Replace single quotes with double quotes and try again
+                                api_result = json.loads(api_result_raw.replace("'", '"'))
+                            except Exception:
+                                # As a last resort, try eval (unsafe for untrusted input)
+                                import ast
+                                try:
+                                    api_result = ast.literal_eval(api_result_raw)
+                                except Exception:
+                                    api_result = api_result_raw
                         st.subheader("API Response")
                         st.write(f"**Tool:** {tool_name}")
                         st.json(api_result)

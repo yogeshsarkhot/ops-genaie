@@ -1,8 +1,6 @@
 import os
 import shutil
 import logging
-import subprocess
-import sys
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
@@ -34,24 +32,6 @@ def reset_uploads():
             return False
     else:
         logger.info(f"Uploads folder not found at {uploads_folder_path}, nothing to delete")
-        return True
-
-def reset_vector_db():
-    """Delete the vector database completely."""
-    logger.info("Resetting vector database...")
-    
-    vector_db_path = os.path.join("chroma_data")
-    
-    if os.path.exists(vector_db_path):
-        try:
-            shutil.rmtree(vector_db_path)
-            logger.info(f"Successfully deleted vector database at {vector_db_path}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to delete vector database: {e}")
-            return False
-    else:
-        logger.info(f"Vector database not found at {vector_db_path}, nothing to delete")
         return True
 
 def reset_postgres_db():
@@ -100,10 +80,7 @@ def reset_postgres_db():
         return False
 
 if __name__ == "__main__":
-    print("Resetting all databases and starting fresh...")
-    
-    # Reset vector database
-    vector_reset = reset_vector_db()
+    print("Resetting database, prior uploads and starting fresh...")
     
     # Reset PostgreSQL database
     postgres_reset = reset_postgres_db()
@@ -111,7 +88,7 @@ if __name__ == "__main__":
     # Reset uploads folder  
     uploads_reset = reset_uploads()
 
-    if vector_reset and postgres_reset and uploads_reset:
-        print("All databases reset successfully!")
+    if postgres_reset and uploads_reset:
+        print("Database reset successfully!")
     else:
-        print("Failed to reset one or more databases. Check reset.log for details.") 
+        print("Failed to reset database. Check reset.log for details.") 

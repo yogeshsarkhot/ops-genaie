@@ -3,8 +3,6 @@ from psycopg2.extras import RealDictCursor
 from datetime import datetime
 import json
 
-import yaml  # Add this import
-
 class Database:
     def __init__(self):
         self.conn = psycopg2.connect(
