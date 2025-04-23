@@ -1,0 +1,417 @@
+openapi: 3.0.0
+info:
+  title: CRUD API
+  version: 1.0.0
+  description: OpenAPI 3.0.0 specification for the CRUD APIs in this project.
+servers:
+  - url: http://localhost:8000
+paths:
+  /users:
+    post:
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '200':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+    get:
+      summary: List users
+      parameters:
+        - in: query
+          name: skip
+          schema:
+            type: integer
+          required: false
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          required: false
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserOut'
+  /users/{user_id}:
+    get:
+      summary: Get user by ID
+      parameters:
+        - in: path
+          name: user_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '404':
+          description: User not found
+    put:
+      summary: Update user
+      parameters:
+        - in: path
+          name: user_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '404':
+          description: User not found
+    delete:
+      summary: Delete user
+      parameters:
+        - in: path
+          name: user_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: User deleted
+        '404':
+          description: User not found
+  /accounts:
+    post:
+      summary: Create a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountCreate'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountInDB'
+    get:
+      summary: List accounts
+      parameters:
+        - in: query
+          name: skip
+          schema:
+            type: integer
+          required: false
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          required: false
+      responses:
+        '200':
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountInDB'
+  /accounts/{account_id}:
+    get:
+      summary: Get account by ID
+      parameters:
+        - in: path
+          name: account_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Account found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountInDB'
+        '404':
+          description: Account not found
+    put:
+      summary: Update account
+      parameters:
+        - in: path
+          name: account_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountUpdate'
+      responses:
+        '200':
+          description: Account updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountInDB'
+        '404':
+          description: Account not found
+    delete:
+      summary: Delete account
+      parameters:
+        - in: path
+          name: account_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '204':
+          description: Account deleted
+        '404':
+          description: Account not found
+  /policies:
+    post:
+      summary: Create a new policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyCreate'
+      responses:
+        '201':
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyInDB'
+    get:
+      summary: List policies
+      parameters:
+        - in: query
+          name: skip
+          schema:
+            type: integer
+          required: false
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          required: false
+      responses:
+        '200':
+          description: List of policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PolicyInDB'
+  /policies/{policy_id}:
+    get:
+      summary: Get policy by ID
+      parameters:
+        - in: path
+          name: policy_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Policy found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyInDB'
+        '404':
+          description: Policy not found
+    put:
+      summary: Update policy
+      parameters:
+        - in: path
+          name: policy_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyUpdate'
+      responses:
+        '200':
+          description: Policy updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyInDB'
+        '404':
+          description: Policy not found
+    delete:
+      summary: Delete policy
+      parameters:
+        - in: path
+          name: policy_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '204':
+          description: Policy deleted
+        '404':
+          description: Policy not found
+components:
+  schemas:
+    UserRole:
+      type: string
+      enum: [admin, teacher, guardian, student]
+    UserBase:
+      type: object
+      properties:
+        fn:
+          type: string
+        ln:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/UserRole'
+      required: [fn, ln, email, role]
+    UserCreate:
+      allOf:
+        - $ref: '#/components/schemas/UserBase'
+    UserUpdate:
+      allOf:
+        - $ref: '#/components/schemas/UserBase'
+    UserOut:
+      allOf:
+        - $ref: '#/components/schemas/UserBase'
+        - type: object
+          properties:
+            user_id:
+              type: integer
+    AccountBase:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        address_line1:
+          type: string
+          minLength: 1
+          maxLength: 200
+        address_line2:
+          type: string
+          maxLength: 200
+        city:
+          type: string
+          minLength: 2
+          maxLength: 100
+        state:
+          type: string
+          minLength: 2
+          maxLength: 50
+        zip_code:
+          type: string
+          pattern: '^\\d{5}(-\\d{4})?$'
+      required: [name, address_line1, city, state, zip_code]
+    AccountCreate:
+      allOf:
+        - $ref: '#/components/schemas/AccountBase'
+    AccountUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        address_line1:
+          type: string
+          minLength: 1
+          maxLength: 200
+        address_line2:
+          type: string
+          maxLength: 200
+        city:
+          type: string
+          minLength: 2
+          maxLength: 100
+        state:
+          type: string
+          minLength: 2
+          maxLength: 50
+        zip_code:
+          type: string
+          pattern: '^\\d{5}(-\\d{4})?$'
+    AccountInDB:
+      allOf:
+        - $ref: '#/components/schemas/AccountBase'
+        - type: object
+          properties:
+            id:
+              type: integer
+    PolicyBase:
+      type: object
+      properties:
+        effective_date:
+          type: string
+          format: date
+        expiration_date:
+          type: string
+          format: date
+        premium:
+          type: number
+          format: float
+          minimum: 0
+        account_id:
+          type: integer
+      required: [effective_date, expiration_date, premium, account_id]
+    PolicyCreate:
+      allOf:
+        - $ref: '#/components/schemas/PolicyBase'
+    PolicyUpdate:
+      type: object
+      properties:
+        effective_date:
+          type: string
+          format: date
+        expiration_date:
+          type: string
+          format: date
+        premium:
+          type: number
+          format: float
+          minimum: 0
+        account_id:
+          type: integer
+    PolicyInDB:
+      allOf:
+        - $ref: '#/components/schemas/PolicyBase'
+        - type: object
+          properties:
+            id:
+              type: integer
