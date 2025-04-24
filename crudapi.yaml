@@ -8,7 +8,7 @@ servers:
 paths:
   /users:
     post:
-      summary: Create a new user
+      summary: Create or add a new user
       requestBody:
         required: true
         content:
@@ -23,7 +23,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserOut'
     get:
-      summary: List users
+      summary: List users or search users by first name, last name, email or role
       parameters:
         - in: query
           name: skip
@@ -35,6 +35,30 @@ paths:
           schema:
             type: integer
           required: false
+        - in: query
+          name: first_name
+          schema:
+            type: string
+          required: false
+          description: Filter users by first name (case-insensitive, substring match)
+        - in: query
+          name: last_name
+          schema:
+            type: string
+          required: false
+          description: Filter users by last name (case-insensitive, substring match)
+        - in: query
+          name: email
+          schema:
+            type: string
+          required: false
+          description: Filter users by email (case-insensitive, substring match)
+        - in: query
+          name: role
+          schema:
+            type: string
+          required: false
+          description: Filter users by role (case-insensitive, substring match)
       responses:
         '200':
           description: List of users
@@ -63,7 +87,7 @@ paths:
         '404':
           description: User not found
     put:
-      summary: Update user
+      summary: Update or modify user
       parameters:
         - in: path
           name: user_id
@@ -86,7 +110,7 @@ paths:
         '404':
           description: User not found
     delete:
-      summary: Delete user
+      summary: Delete or remove user
       parameters:
         - in: path
           name: user_id
@@ -100,7 +124,7 @@ paths:
           description: User not found
   /accounts:
     post:
-      summary: Create a new account
+      summary: Create or add a new account
       requestBody:
         required: true
         content:
@@ -155,7 +179,7 @@ paths:
         '404':
           description: Account not found
     put:
-      summary: Update account
+      summary: Update or modify account
       parameters:
         - in: path
           name: account_id
@@ -178,7 +202,7 @@ paths:
         '404':
           description: Account not found
     delete:
-      summary: Delete account
+      summary: Delete or remove account
       parameters:
         - in: path
           name: account_id
@@ -285,6 +309,7 @@ paths:
   /courses:
     post:
       summary: Create a new course
+      description: Create a new course with the provided details.
       requestBody:
         required: true
         content:
@@ -293,27 +318,30 @@ paths:
               $ref: '#/components/schemas/CourseCreate'
       responses:
         '201':
-          description: Course created
+          description: Course successfully created.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CourseInDB'
     get:
       summary: List courses
+      description: Retrieve a list of all courses.
       parameters:
         - in: query
           name: skip
           schema:
             type: integer
           required: false
+          description: Number of items to skip for pagination.
         - in: query
           name: limit
           schema:
             type: integer
           required: false
+          description: Maximum number of items to return.
       responses:
         '200':
-          description: List of courses
+          description: List of courses.
           content:
             application/json:
               schema:
@@ -323,29 +351,33 @@ paths:
   /courses/{course_id}:
     get:
       summary: Get course by ID
+      description: Retrieve a course by its unique ID.
       parameters:
         - in: path
           name: course_id
           schema:
             type: integer
           required: true
+          description: Unique identifier of the course.
       responses:
         '200':
-          description: Course found
+          description: Course found.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CourseInDB'
         '404':
-          description: Course not found
+          description: Course not found.
     put:
       summary: Update course
+      description: Update the details of an existing course by its ID.
       parameters:
         - in: path
           name: course_id
           schema:
             type: integer
           required: true
+          description: Unique identifier of the course.
       requestBody:
         required: true
         content:
@@ -354,26 +386,28 @@ paths:
               $ref: '#/components/schemas/CourseUpdate'
       responses:
         '200':
-          description: Course updated
+          description: Course updated successfully.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CourseInDB'
         '404':
-          description: Course not found
+          description: Course not found.
     delete:
       summary: Delete course
+      description: Delete a course by its unique ID.
       parameters:
         - in: path
           name: course_id
           schema:
             type: integer
           required: true
+          description: Unique identifier of the course.
       responses:
         '204':
-          description: Course deleted
+          description: Course deleted successfully.
         '404':
-          description: Course not found
+          description: Course not found.
   /batches:
     post:
       summary: Create a new batch
@@ -788,15 +822,20 @@ components:
       properties:
         name:
           type: string
+          description: Name of the course.
         description:
           type: string
+          description: Detailed description of the course.
       required: [name]
+      description: Base schema for a course.
     CourseCreate:
       allOf:
         - $ref: '#/components/schemas/CourseBase'
+      description: Schema for creating a new course.
     CourseUpdate:
       allOf:
         - $ref: '#/components/schemas/CourseBase'
+      description: Schema for updating an existing course.
     CourseInDB:
       allOf:
         - $ref: '#/components/schemas/CourseBase'
@@ -804,6 +843,8 @@ components:
           properties:
             id:
               type: integer
+              description: Unique identifier for the course.
+      description: Schema representing a course stored in the database.
     BatchBase:
       type: object
       properties:

@@ -119,11 +119,11 @@ def main():
                         st.subheader("API Response")
                         st.write(f"**Tool:** {tool_name}")
                         st.json(api_result)
-                        # Pass the API result to LLM for user-friendly summary
+                        # Pass the API result to LLM for user-friendly explanation
                         with st.spinner("Summarizing response..."):
-                            summary = llm.summarize_api_response(api_result if isinstance(api_result, dict) else {'body': api_result})
-                            st.subheader("Response Summary")
-                            st.write(summary)
+                            explanation = llm.explain_api_response(api_result if isinstance(api_result, dict) else {'body': api_result})
+                            st.subheader("Response Explanation")
+                            st.write(explanation)
                     else:
                         st.write(response_text)
                 else:

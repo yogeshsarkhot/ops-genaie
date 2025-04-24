@@ -40,7 +40,7 @@ Example format:
 """
         # Get parameter values from LLM
         response = ollama.chat(
-            model=self.model,
+            model="llama3-groq-tool-use",
             messages=[
                 {'role': 'system', 'content': 'You are a parameter extractor. Extract values for URL parameters from the given query.'},
                 {'role': 'user', 'content': param_prompt}
@@ -92,7 +92,7 @@ Example format:
 """
         # Get request body values from LLM
         response = ollama.chat(
-            model=self.model,
+            model="llama3-groq-tool-use",
             messages=[
                 {'role': 'system', 'content': 'You are a request body extractor. Extract values for request body fields from the given query.'},
                 {'role': 'user', 'content': schema_prompt}
@@ -156,7 +156,7 @@ Example format:
 
         # Call LLM
         response = ollama.chat(
-            model=self.model,
+            model="llama3-groq-tool-use",
             messages=[
                 {'role': 'system', 'content': 'You are an API assistant.'},
                 {'role': 'user', 'content': prompt}
@@ -269,23 +269,23 @@ Example format:
         # Return query history from database
         return self.db.get_query_history()
 
-    def summarize_api_response(self, api_response):
-        """Summarize API response in plain English."""
+    def explain_api_response(self, api_response):
+        """Explain API response in plain English."""
         try:
             # Format the response for the LLM
             response_text = f"""API Response:\nStatus Code: {api_response.get('status_code')}\nHeaders: {json.dumps(api_response.get('headers', {}) , indent=2)}\nBody: {json.dumps(api_response.get('body', {}), indent=2)}\n"""
-            # Create prompt for summarization
-            prompt = f"""Please summarize the following API response in plain English. \nFocus on explaining what the response means and any important information it contains.\nKeep the summary concise but informative.\n\n{response_text}\n\nSummary:"""
-            # Get summary from LLM
+            # Create prompt for explanation
+            prompt = f"""Please explain the following API response in plain English. \nFocus on explaining what the response means and any important information it contains.\nKeep the explanation concise but informative.\n\n{response_text}\n\nExplanation:"""
+            # Get explanation from LLM
             response = ollama.chat(
-                model=self.model,
+                model="llama3.1",
                 messages=[
-                    {'role': 'system', 'content': 'You are an API response summarizer. Explain API responses in clear, plain English.'},
+                    {'role': 'system', 'content': 'You are an API response explainer. Explain API responses in clear, plain English.'},
                     {'role': 'user', 'content': prompt}
                 ],
                 options={"temperature": 0.0}
             )
             return response['message']['content'].strip()
         except Exception as e:
-            print(f"Error summarizing API response: {str(e)}")
-            return "Unable to summarize the API response."
+            print(f"Error explaining API response: {str(e)}")
+            return "Unable to explain the API response."
