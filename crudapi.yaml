@@ -282,6 +282,374 @@ paths:
           description: Policy deleted
         '404':
           description: Policy not found
+  /courses:
+    post:
+      summary: Create a new course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseCreate'
+      responses:
+        '201':
+          description: Course created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseInDB'
+    get:
+      summary: List courses
+      parameters:
+        - in: query
+          name: skip
+          schema:
+            type: integer
+          required: false
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          required: false
+      responses:
+        '200':
+          description: List of courses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CourseInDB'
+  /courses/{course_id}:
+    get:
+      summary: Get course by ID
+      parameters:
+        - in: path
+          name: course_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Course found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseInDB'
+        '404':
+          description: Course not found
+    put:
+      summary: Update course
+      parameters:
+        - in: path
+          name: course_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseUpdate'
+      responses:
+        '200':
+          description: Course updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseInDB'
+        '404':
+          description: Course not found
+    delete:
+      summary: Delete course
+      parameters:
+        - in: path
+          name: course_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '204':
+          description: Course deleted
+        '404':
+          description: Course not found
+  /batches:
+    post:
+      summary: Create a new batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchCreate'
+      responses:
+        '201':
+          description: Batch created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchInDB'
+    get:
+      summary: List batches
+      parameters:
+        - in: query
+          name: skip
+          schema:
+            type: integer
+          required: false
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          required: false
+      responses:
+        '200':
+          description: List of batches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BatchInDB'
+  /batches/{batch_id}:
+    get:
+      summary: Get batch by ID
+      parameters:
+        - in: path
+          name: batch_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Batch found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchInDB'
+        '404':
+          description: Batch not found
+    put:
+      summary: Update batch
+      parameters:
+        - in: path
+          name: batch_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchUpdate'
+      responses:
+        '200':
+          description: Batch updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchInDB'
+        '404':
+          description: Batch not found
+    delete:
+      summary: Delete batch
+      parameters:
+        - in: path
+          name: batch_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '204':
+          description: Batch deleted
+        '404':
+          description: Batch not found
+  /guarding_student_mappings:
+    post:
+      summary: Create a new guarding-student mapping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuardingStudentMappingCreate'
+      responses:
+        '201':
+          description: Mapping created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuardingStudentMappingInDB'
+    get:
+      summary: List guarding-student mappings
+      parameters:
+        - in: query
+          name: skip
+          schema:
+            type: integer
+          required: false
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          required: false
+      responses:
+        '200':
+          description: List of mappings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GuardingStudentMappingInDB'
+  /guarding_student_mappings/{mapping_id}:
+    get:
+      summary: Get mapping by ID
+      parameters:
+        - in: path
+          name: mapping_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Mapping found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuardingStudentMappingInDB'
+        '404':
+          description: Mapping not found
+    put:
+      summary: Update mapping
+      parameters:
+        - in: path
+          name: mapping_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuardingStudentMappingUpdate'
+      responses:
+        '200':
+          description: Mapping updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuardingStudentMappingInDB'
+        '404':
+          description: Mapping not found
+    delete:
+      summary: Delete mapping
+      parameters:
+        - in: path
+          name: mapping_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '204':
+          description: Mapping deleted
+        '404':
+          description: Mapping not found
+  /batch_sessions:
+    post:
+      summary: Create a new batch session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchSessionCreate'
+      responses:
+        '201':
+          description: Batch session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchSessionInDB'
+    get:
+      summary: List batch sessions
+      parameters:
+        - in: query
+          name: skip
+          schema:
+            type: integer
+          required: false
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          required: false
+      responses:
+        '200':
+          description: List of batch sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BatchSessionInDB'
+  /batch_sessions/{session_id}:
+    get:
+      summary: Get batch session by ID
+      parameters:
+        - in: path
+          name: session_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Batch session found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchSessionInDB'
+        '404':
+          description: Batch session not found
+    put:
+      summary: Update batch session
+      parameters:
+        - in: path
+          name: session_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchSessionUpdate'
+      responses:
+        '200':
+          description: Batch session updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchSessionInDB'
+        '404':
+          description: Batch session not found
+    delete:
+      summary: Delete batch session
+      parameters:
+        - in: path
+          name: session_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '204':
+          description: Batch session deleted
+        '404':
+          description: Batch session not found
 components:
   schemas:
     UserRole:
@@ -290,16 +658,16 @@ components:
     UserBase:
       type: object
       properties:
-        fn:
+        first_name:
           type: string
-        ln:
+        last_name:
           type: string
         email:
           type: string
           format: email
         role:
           $ref: '#/components/schemas/UserRole'
-      required: [fn, ln, email, role]
+      required: [first_name, last_name, email, role]
     UserCreate:
       allOf:
         - $ref: '#/components/schemas/UserBase'
@@ -411,6 +779,93 @@ components:
     PolicyInDB:
       allOf:
         - $ref: '#/components/schemas/PolicyBase'
+        - type: object
+          properties:
+            id:
+              type: integer
+    CourseBase:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+      required: [name]
+    CourseCreate:
+      allOf:
+        - $ref: '#/components/schemas/CourseBase'
+    CourseUpdate:
+      allOf:
+        - $ref: '#/components/schemas/CourseBase'
+    CourseInDB:
+      allOf:
+        - $ref: '#/components/schemas/CourseBase'
+        - type: object
+          properties:
+            id:
+              type: integer
+    BatchBase:
+      type: object
+      properties:
+        name:
+          type: string
+        course_id:
+          type: integer
+      required: [name, course_id]
+    BatchCreate:
+      allOf:
+        - $ref: '#/components/schemas/BatchBase'
+    BatchUpdate:
+      allOf:
+        - $ref: '#/components/schemas/BatchBase'
+    BatchInDB:
+      allOf:
+        - $ref: '#/components/schemas/BatchBase'
+        - type: object
+          properties:
+            id:
+              type: integer
+    GuardingStudentMappingBase:
+      type: object
+      properties:
+        guardian_id:
+          type: integer
+        student_id:
+          type: integer
+      required: [guardian_id, student_id]
+    GuardingStudentMappingCreate:
+      allOf:
+        - $ref: '#/components/schemas/GuardingStudentMappingBase'
+    GuardingStudentMappingUpdate:
+      allOf:
+        - $ref: '#/components/schemas/GuardingStudentMappingBase'
+    GuardingStudentMappingInDB:
+      allOf:
+        - $ref: '#/components/schemas/GuardingStudentMappingBase'
+        - type: object
+          properties:
+            id:
+              type: integer
+    BatchSessionBase:
+      type: object
+      properties:
+        batch_id:
+          type: integer
+        session_date:
+          type: string
+          format: date
+        topic:
+          type: string
+      required: [batch_id, session_date, topic]
+    BatchSessionCreate:
+      allOf:
+        - $ref: '#/components/schemas/BatchSessionBase'
+    BatchSessionUpdate:
+      allOf:
+        - $ref: '#/components/schemas/BatchSessionBase'
+    BatchSessionInDB:
+      allOf:
+        - $ref: '#/components/schemas/BatchSessionBase'
         - type: object
           properties:
             id:
